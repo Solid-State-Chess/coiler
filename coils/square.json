@@ -1,0 +1,16 @@
+{
+    "name": "Square (FITS WITH SYMMETRICAL CROSS)",
+    "current": 0.3,
+    "reflect": true,
+    "base": "outer",
+    "center": [19, 19],
+    "turns": 57,
+    "layers": 2,
+    "spacing": 0.127,
+    "trace_width": 0.127,
+    "vertices": [
+        [13.5, 0],
+        [13.5, 13.5],
+        [0, 13.5]
+    ]
+}

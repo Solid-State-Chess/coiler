@@ -1,0 +1,15 @@
+{
+    "name": "Equilateral Octogon",
+    "current": 0.3,
+    "reflect": true,
+    "base": "outer",
+    "center": [19, 19],
+    "turns": 53,
+    "layers": 2,
+    "spacing": 0.127,
+    "trace_width": 0.127,
+    "vertices": [
+        [13.4350288426, 5.56497115745],
+        [5.56497115745, 13.4350288426]
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Flared Cross (TRANSVERSE ONLY)",
+    "current": 0.3,
+    "reflect": true,
+    "base": "outer",
+    "center": [38, 38],
+    "turns": 20,
+    "layers": 2,
+    "spacing": 0.127,
+    "trace_width": 0.127,
+    "vertices": [
+        [18.8, 7],
+        [5, 5],
+        [7, 18.8]
+    ]
+}
