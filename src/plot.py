@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Optional, cast
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
@@ -8,9 +8,8 @@ from coil import Coil
 from constants import CHESS_SQUARE_SIZE, magnitude, centering_strength
 from report import FullFieldReport
 
-
 # Write a field centering strength contour map of the given coil to the given axis
-def plot_field_contour_on_axis(topax: Axes, coil: Coil, report: FullFieldReport) -> None:
+def plot_field_contour_on_axis(topax: Axes, coil: Coil, report: FullFieldReport, cutoff: Optional[float] = 0.3 / 1000) -> None:
     topax.set_title("Centering Magnetic Flux Density")
     topax.set_axis_off()
     topax.set_aspect('equal')
@@ -22,10 +21,9 @@ def plot_field_contour_on_axis(topax: Axes, coil: Coil, report: FullFieldReport)
         color=(0, 0, 0, 0.1),
         linewidth=0.1,
     )
-
-    field = [
-        [
-            centering_strength(
+    
+    def map_field_strength(pos, field):
+        strength = centering_strength(
                 pos,
                 field,
                 np.array([
@@ -34,6 +32,15 @@ def plot_field_contour_on_axis(topax: Axes, coil: Coil, report: FullFieldReport)
                     coil.center[1]
                 ])
             )
+        
+        if cutoff is None or strength >= cutoff:
+            return strength
+        else:
+            return 1 / 1_000_000
+
+    field = [
+        [
+            map_field_strength(pos, field)
             for pos, field in zip(*row)
         ]
         for row in zip(report.top_observer_grid, report.B_top)
@@ -47,18 +54,19 @@ def plot_field_contour_on_axis(topax: Axes, coil: Coil, report: FullFieldReport)
         cmap = "inferno",
         zorder = 1
     )
-
-    topax.streamplot(
-        report.top_observer_grid[:, :, 0],
-        report.top_observer_grid[:, :, 2],
-        report.B_top[:, :, 0],
-        report.B_top[:, :, 2],
-        density = 1,
-        color = np.log(field),
-        linewidth = 2,
-        cmap = 'plasma',
-        zorder = 10
-    )
+    
+    if cutoff is None:
+        topax.streamplot(
+            report.top_observer_grid[:, :, 0],
+            report.top_observer_grid[:, :, 2],
+            report.B_top[:, :, 0],
+            report.B_top[:, :, 2],
+            density = 1,
+            color = np.log(field),
+            linewidth = 2,
+            cmap = 'plasma',
+            zorder = 10
+        )
 
     board_square = np.array([
         (0,                            0),

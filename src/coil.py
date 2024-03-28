@@ -44,28 +44,31 @@ class Coil(object):
         self.verts = []
         
         space_between = self.spacing + self.trace_width
+        extension_vectors = []
+        for j, vert in enumerate(self.base_verts):
+            last_line = normalized(vert - self.base_verts[j - 1])
+            next_line = normalized(self.base_verts[(j + 1) % len(self.base_verts)] - vert)
+
+            last_normal = normalized(np.array([last_line[1], -last_line[0]]))
+            next_normal = normalized(np.array([next_line[1], -next_line[0]]))
+
+            normal_angle = np.arctan2(next_normal[1], next_normal[0]) - np.arctan2(last_normal[1], last_normal[0])
+            extension = np.tan(normal_angle / 2) * last_line
+
+            extension_vectors.append(extension + last_normal)
+
+
         for i in range(self.turns):
             space = space_between * i
-            for j, vert in enumerate(self.base_verts):
+            for vert, ext in zip(self.base_verts, extension_vectors):
                 angle = np.arctan2(vert[1], vert[0])
                 if angle < 0:
                     angle = 2 * np.pi + angle
 
-                
-                last_line = normalized(vert - self.base_verts[j - 1])
-                next_line = normalized(self.base_verts[(j + 1) % len(self.base_verts)] - vert)
-
-                last_normal = normalized(np.array([last_line[1], -last_line[0]]))
-                next_normal = normalized(np.array([next_line[1], -next_line[0]]))
-
                 vert_space = space + (space_between * angle / (2 * np.pi))
                 vert_space *= 1 if self.base == 'inner' else -1
 
-                normal_angle = np.arctan2(next_normal[1], next_normal[0]) - np.arctan2(last_normal[1], last_normal[0])
-                extension = (vert_space * np.tan(normal_angle / 2)) * last_line
-
-
-                self.verts.append(vert + (last_normal * vert_space + extension))
+                self.verts.append(vert + vert_space * ext)
 
         self.verts = np.array(self.verts)
         self.size = np.array(
