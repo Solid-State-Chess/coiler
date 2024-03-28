@@ -3,7 +3,7 @@ from itertools import pairwise
 
 from KicadModTree.Vector import Vector2D
 
-from constants import normalized
+from constants import magnitude, normalized
 
 import numpy as np
 from magpylib import current
@@ -22,6 +22,7 @@ class Coil(object):
         self.base = desc['base']
         self.turns = desc['turns'] if self.base == 'inner' else desc['turns']
         self.current = desc['current']
+        self.trace_height = desc['trace_height'] / 1000 if 'trace_height' in desc else 34.1 / 1_000_000
 
         unreflect_verts = [np.array(array) / 1000 for array in desc['vertices']]
         
@@ -45,9 +46,9 @@ class Coil(object):
         
         space_between = self.spacing + self.trace_width
         extension_vectors = []
-        for j, vert in enumerate(self.base_verts):
-            last_line = normalized(vert - self.base_verts[j - 1])
-            next_line = normalized(self.base_verts[(j + 1) % len(self.base_verts)] - vert)
+        for i, vert in enumerate(self.base_verts):
+            last_line = normalized(vert - self.base_verts[i - 1])
+            next_line = normalized(self.base_verts[(i + 1) % len(self.base_verts)] - vert)
 
             last_normal = normalized(np.array([last_line[1], -last_line[0]]))
             next_normal = normalized(np.array([next_line[1], -next_line[0]]))
@@ -56,7 +57,6 @@ class Coil(object):
             extension = np.tan(normal_angle / 2) * last_line
 
             extension_vectors.append(extension + last_normal)
-
 
         for i in range(self.turns):
             space = space_between * i
@@ -76,11 +76,16 @@ class Coil(object):
             max(self.verts[:, 1]) - min(self.verts[:, 0])
         )
 
+        self.length = sum(magnitude(v2 - v1) for v1, v2 in pairwise(self.verts)) * self.layers
+        
+        p_cu = 1.724e-8
+        self.resistance = p_cu * (self.length / (self.trace_width * self.trace_height))
+
     # Get a magpylib simulation model for this coil 
     def simulation_model(self):
         sim_verts = []
         for i in range(self.layers):
-            layer = [(v[0], i * -self.spacing / 1000, v[1]) for v in self.verts]
+            layer = [(v[0], i * -self.spacing, v[1]) for v in self.verts]
             sim_verts.extend(layer)
         return current.Polyline(position=(0,0,0), vertices=sim_verts, current=self.current)
     
