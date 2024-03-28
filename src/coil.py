@@ -1,10 +1,14 @@
 import json
+from itertools import pairwise
+
+from KicadModTree.Vector import Vector2D
 
 from constants import normalized
+
 import numpy as np
 from magpylib import current
 
-from KicadModTree import Footprint, Line, Text, RingPad
+from KicadModTree import Footprint, KicadFileHandler, Line, Pad, Text, RingPad
 
 # Coil deserialized from a JSON descriptor file
 class Coil(object):
@@ -39,7 +43,7 @@ class Coil(object):
         
         self.verts = []
         
-        space_between = self.spacing + (self.trace_width / 2)
+        space_between = self.spacing + self.trace_width
         for i in range(self.turns):
             space = space_between * i
             for j, vert in enumerate(self.base_verts):
@@ -78,22 +82,44 @@ class Coil(object):
         return current.Polyline(position=(0,0,0), vertices=sim_verts, current=self.current)
     
     # Generate a KiCad footprint object that represents this coil
-    def kicad_model(self):
+    def kicad_model(self) -> Footprint:
         footprint = Footprint(self.name)
         footprint.setTags("coil")
         
         footprint.append(Text(
             type='reference',
             text='REF**',
-            at=self.size + [1, 1],
+            at=Vector2D(tuple(self.size + [1, 1])),
             layer='F.SilkS'
         ))
         
-        for layer in self.layers:
-            for vert in self.verts:
-                pass
+        footprint.append(Pad(
+            number = 1,
+            type = Pad.TYPE_CONNECT,
+            shape = Pad.SHAPE_RECT,
+            size=Vector2D(1,1),
+            at = Vector2D(tuple(self.verts[0])),
+            layers=['F.Cu']
+        ))
 
-        pass
+        for last_vert, next_vert in pairwise(self.verts):
+            footprint.append(Line(
+                start=Vector2D(tuple(last_vert * 1000)),
+                end  =Vector2D(tuple(next_vert * 1000)),
+                layer='F.Cu',
+                width=self.trace_width * 1000,
+            ))
+
+        footprint.append(Pad(
+            number = 2,
+            type = Pad.TYPE_CONNECT,
+            shape = Pad.SHAPE_RECT,
+            size=[1,1],
+            at = Vector2D(tuple(self.verts[len(self.verts) - 1])),
+            layers=['F.Cu']
+        ))
+
+        return footprint
 
     
     # Get a title for an analysis of this coil

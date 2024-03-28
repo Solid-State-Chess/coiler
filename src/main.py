@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from KicadModTree import KicadFileHandler
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -78,6 +79,19 @@ view = cmds.add_parser(
     help = 'View the given coil in 3D'
 )
 
+export = cmds.add_parser(
+    name = 'export',
+    help = 'Export the coil to a KiCAD footprint',
+)
+
+export.add_argument(
+    '-o',
+    '--output',
+    dest = 'output',
+    help = 'Path to write footprint to',
+    required = True,
+)
+
 if __name__ == '__main__':
     args = parser.parse_args()
     
@@ -124,3 +138,8 @@ if __name__ == '__main__':
             )
         case 'view':
             coil.simulation_model().show()
+        case 'export':
+            module = coil.kicad_model()
+
+            file_handler = KicadFileHandler(module)
+            file_handler.writeFile(args.output)

@@ -130,17 +130,24 @@ def plot_report(coil: Coil, report: FullFieldReport) -> Figure:
     
     sideax: Axes = sideax
     sideax.set_title('Side View Streamplot')
-    sideax.set_xlim(0, report.bound)
+    bound = report.bound * 1000
+    sideax.set_xlim(0, bound)
+    sideax.set_ylim(-bound / 2, bound / 2)
     sideax.set_facecolor('black')
+    sideax.set_aspect(0.5)
     sideax.streamplot(
-        report.side_observer_grid[:, :, 0],
-        report.side_observer_grid[:, :, 1],
+        report.side_observer_grid[:, :, 0] * 1000,
+        report.side_observer_grid[:, :, 1] * 1000,
         report.B_side[:, :, 0],
         report.B_side[:, :, 1],
         density = 1,
         cmap = 'inferno',
         color = np.log([[magnitude(j) for j in i] for i in report.B_side]),
     )
+
+    sideax.plot([0,bound], [0,0], 'w-')
+    sideax.plot([bound/2,bound/2], [bound/2,-bound/2], 'w--')
+
     sideax.set_xlabel('Length (mm)')
 
     
