@@ -40,16 +40,16 @@ class DiscreteFieldReport(object):
         self.center =     Sensor(self.sensor_pos_center).getB(model)
         self.diagonals = [Sensor(pos).getB(model) for pos in self.sensor_pos_diagonal]
         
-        self.lateral_avg =  sum(magnitude(v) for v in self.laterals)  / 4
+        self.lateral_avg =  max(magnitude(v) for v in self.laterals)
         self.center_avg = magnitude(self.center)
-        self.diagonal_avg = sum(magnitude(v) for v in self.diagonals) / 4
+        self.diagonal_avg = max(magnitude(v) for v in self.diagonals)
 
         center = np.array([0, self.observer_height, 0])
         self.centering_laterals = [centering_strength(pos, lat, center) for pos, lat in zip(self.sensor_pos_lateral, self.laterals)]
         self.centering_diagonals = [centering_strength(pos, dia, center) for pos, dia in zip(self.sensor_pos_diagonal, self.diagonals)]
 
-        self.centering_lateral_avg = sum(self.centering_laterals) / 4
-        self.centering_diagonal_avg = sum(self.centering_diagonals) / 4
+        self.centering_lateral_avg = max(self.centering_laterals)
+        self.centering_diagonal_avg = max(self.centering_diagonals)
 
         self._12mm = Sensor([12 / 1000, self.observer_height, 0]).getB(model)
         print(f'12mm is {magnitude(self._12mm) * 1000}mT      centering {centering_strength(np.array([12 / 1000, self.observer_height, 0]), self._12mm, [0,self.observer_height,0]) * 1000}mT')

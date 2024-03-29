@@ -9,7 +9,7 @@ from constants import CHESS_SQUARE_SIZE, magnitude, centering_strength
 from report import FullFieldReport
 
 # Write a field centering strength contour map of the given coil to the given axis
-def plot_field_contour_on_axis(topax: Axes, coil: Coil, report: FullFieldReport, cutoff: Optional[float] = 0.3 / 1000) -> None:
+def plot_field_contour_on_axis(topax: Axes, coil: Coil, report: FullFieldReport, cutoff: Optional[float] = None) -> None:
     topax.set_title("Centering Magnetic Flux Density")
     topax.set_axis_off()
     topax.set_aspect('equal')

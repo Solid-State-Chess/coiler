@@ -6,14 +6,13 @@ from KicadModTree.Vector import Vector2D
 from constants import magnitude, normalized
 
 import numpy as np
-from magpylib import current
+from magpylib import Collection, current
 
 from KicadModTree import Footprint, KicadFileHandler, Line, Pad, Text, RingPad
 
 # Coil deserialized from a JSON descriptor file
 class Coil(object):
-    def __init__(self, path):
-        desc = json.load(open(path))
+    def __init__(self, desc):
         self.layers = desc['layers']
         self.center = np.array(desc['center']) / 1000
         self.name = desc['name']
@@ -21,8 +20,10 @@ class Coil(object):
         self.trace_width = desc['trace_width'] / 1000
         self.base = desc['base']
         self.turns = desc['turns'] if self.base == 'inner' else desc['turns']
-        self.current = desc['current']
         self.trace_height = desc['trace_height'] / 1000 if 'trace_height' in desc else 34.1 / 1_000_000
+
+        if 'current' in desc:
+            self.current: float = desc['current']
 
         unreflect_verts = [np.array(array) / 1000 for array in desc['vertices']]
         
@@ -44,19 +45,35 @@ class Coil(object):
         
         self.verts = []
         
+        def angle_between(v1, v2):
+            angle = np.arctan2(v1[1], v1[0]) - np.arctan2(v2[1], v2[0])
+            if angle < 0:
+                angle = 2 * np.pi + angle
+            return angle
+
         space_between = self.spacing + self.trace_width
         extension_vectors = []
+        to_remove = []
         for i, vert in enumerate(self.base_verts):
             last_line = normalized(vert - self.base_verts[i - 1])
             next_line = normalized(self.base_verts[(i + 1) % len(self.base_verts)] - vert)
 
-            last_normal = normalized(np.array([last_line[1], -last_line[0]]))
-            next_normal = normalized(np.array([next_line[1], -next_line[0]]))
+            last_normal = normalized(np.array([-last_line[1], last_line[0]]))
+            next_normal = normalized(np.array([-next_line[1], next_line[0]]))
 
-            normal_angle = np.arctan2(next_normal[1], next_normal[0]) - np.arctan2(last_normal[1], last_normal[0])
+            normal_angle = angle_between(last_normal, next_normal)
+            if normal_angle == 0:
+                to_remove.append(i)
+                continue
+
             extension = np.tan(normal_angle / 2) * last_line
 
             extension_vectors.append(extension + last_normal)
+        
+        removed = 0
+        for i in to_remove:
+            del self.base_verts[i + removed]
+            removed -= 1
 
         for i in range(self.turns):
             space = space_between * i
@@ -66,9 +83,10 @@ class Coil(object):
                     angle = 2 * np.pi + angle
 
                 vert_space = space + (space_between * angle / (2 * np.pi))
-                vert_space *= 1 if self.base == 'inner' else -1
-
+                vert_space *= -1 if self.base == 'inner' else 1
+                
                 self.verts.append(vert + vert_space * ext)
+
 
         self.verts = np.array(self.verts)
         self.size = np.array(
@@ -81,6 +99,9 @@ class Coil(object):
         p_cu = 1.724e-8
         self.resistance = p_cu * (self.length / (self.trace_width * self.trace_height))
 
+        if 'current' not in desc:
+            self.current: float = np.sqrt(desc['power'] / self.resistance)
+
     # Get a magpylib simulation model for this coil 
     def simulation_model(self):
         sim_verts = []
@@ -91,6 +112,7 @@ class Coil(object):
     
     # Generate a KiCad footprint object that represents this coil
     def kicad_model(self) -> Footprint:
+        layer = 'F.Cu'
         footprint = Footprint(self.name)
         footprint.setTags("coil")
         
@@ -107,14 +129,14 @@ class Coil(object):
             shape = Pad.SHAPE_RECT,
             size=Vector2D(1,1),
             at = Vector2D(tuple(self.verts[0])),
-            layers=['F.Cu']
+            layers=[layer]
         ))
 
         for last_vert, next_vert in pairwise(self.verts):
             footprint.append(Line(
                 start=Vector2D(tuple(last_vert * 1000)),
                 end  =Vector2D(tuple(next_vert * 1000)),
-                layer='F.Cu',
+                layer=layer,
                 width=self.trace_width * 1000,
             ))
 
@@ -124,7 +146,7 @@ class Coil(object):
             shape = Pad.SHAPE_RECT,
             size=[1,1],
             at = Vector2D(tuple(self.verts[len(self.verts) - 1])),
-            layers=['F.Cu']
+            layers=[layer]
         ))
 
         return footprint
@@ -132,4 +154,4 @@ class Coil(object):
     
     # Get a title for an analysis of this coil
     def analysis_title(self) -> str:
-        return f'Field Analysis: {self.name} ({self.layers} Layer{"s" if self.layers != 1 else ""}, {self.turns} Turns) @ {self.current * 1000:.0f}mA'
+        return f'Field Analysis: {self.name} ({self.layers} Layer{"s" if self.layers != 1 else ""}, {self.turns} Turns) @ {self.current * 1000:.0f}mA ({self.resistance:.2f}Ω)'

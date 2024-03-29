@@ -1,4 +1,7 @@
 from argparse import ArgumentParser
+from copy import deepcopy
+from enum import Enum
+import json
 from KicadModTree import KicadFileHandler
 import matplotlib
 import matplotlib.pyplot as plt
@@ -92,28 +95,58 @@ export.add_argument(
     required = True,
 )
 
+optimize = cmds.add_parser(
+    'optimize',
+    help = 'Optimize a design using \'null\' placeholders for vertices over a given range'
+)
+
+optimize.add_argument(
+    'lower',
+    type=float,
+    help='Lower bound to optimize over'
+)
+
+optimize.add_argument(
+    'upper',
+    type=float,
+    help='Upper bound to optimize over'
+)
+
+class OptimizeOver(Enum):
+    LATERAL  = 0
+    DIAGONAL = 1
+    CENTER   = 2
+
+
+optimize.add_argument(
+    'over',
+    type=lambda v: OptimizeOver.LATERAL if v == 'lateral' else None,
+
+)
+
 if __name__ == '__main__':
     args = parser.parse_args()
-    
-    coil = Coil(args.file)
 
-    field = DiscreteFieldReport(coil)
-    ALLOW_ERR = args.allowable_error / 1000
-    for p, d in zip(field.sensor_pos_diagonal, field.diagonals):
-        mag = magnitude(d)
-        pos = p * 1000
-        if np.abs(mag - field.diagonal_avg) >= ALLOW_ERR:
-            print(f'WARNING: Diagonal field strength is not uniform: {mag * 1000:.4f} mT @ ({pos[0], pos[2]}) mm, mean is {field.diagonal_avg * 1000:.4f} mT')
+    def check_field_uniformity(field) -> None:
+        ALLOW_ERR = args.allowable_error / 1000
+        for p, d in zip(field.sensor_pos_diagonal, field.diagonals):
+            mag = magnitude(d)
+            pos = p * 1000
+            if np.abs(mag - field.diagonal_avg) >= ALLOW_ERR:
+                print(f'WARNING: Diagonal field strength is not uniform: {mag * 1000:.4f} mT @ ({pos[0], pos[2]}) mm, mean is {field.diagonal_avg * 1000:.4f} mT')
 
-    for p, t in zip(field.sensor_pos_lateral, field.laterals):
-        mag = magnitude(t)
-        pos = p * 1000
-        if np.abs(mag - field.lateral_avg) >= ALLOW_ERR:
-            print(f'WARNING: Lateral field strength is not uniform: {mag * 1000:.4f} mT @ ({pos[0], pos[2]}) mm, mean is {field.lateral_avg * 1000:.4f} mT')
+        for p, t in zip(field.sensor_pos_lateral, field.laterals):
+            mag = magnitude(t)
+            pos = p * 1000
+            if np.abs(mag - field.lateral_avg) >= ALLOW_ERR:
+                print(f'WARNING: Lateral field strength is not uniform: {mag * 1000:.4f} mT @ ({pos[0], pos[2]}) mm, mean is {field.lateral_avg * 1000:.4f} mT')
 
     match args.cmd:
         case 'plot':
+            coil = Coil(json.load(open(args.file)))
+
             report = FullFieldReport(coil, resolution = args.resolution)
+            check_field_uniformity(report)
             figure = plot_report(coil, report) if not args.field_only else plot_field_contour(coil, report)
             
             if args.output is not None:
@@ -122,9 +155,8 @@ if __name__ == '__main__':
             else:
                 plt.show()
         case 'discrete':
-            
-
-            
+            coil = Coil(json.load(open(args.file)))
+            field = DiscreteFieldReport(coil)
 
             print(
     f"""
@@ -137,9 +169,47 @@ if __name__ == '__main__':
     """
             )
         case 'view':
-            coil.simulation_model().show()
+            Coil(json.load(open(args.file))).simulation_model().show()
         case 'export':
+            coil = Coil(json.load(open(args.file)))
             module = coil.kicad_model()
 
             file_handler = KicadFileHandler(module)
             file_handler.writeFile(args.output)
+
+        case 'optimize':
+            base = json.load(open(args.file))
+            
+            steps = 100
+            lower = args.lower
+            upper = args.upper
+            x = lower
+            
+            best = None
+            max = -1e99
+
+            def replace_var(json, x):
+                copy = deepcopy(json)
+                for array in copy['vertices']:
+                    for i in range(len(array)):
+                        if array[i] is None:
+                            array[i] = x
+                if copy['turns'] is None:
+                    copy['turns'] = int(x)
+                return copy
+
+            for i in range(steps):
+                new = replace_var(base, x)
+                coil = Coil(new)
+                field = DiscreteFieldReport(coil)
+                if field.centering_lateral_avg > max:
+                    best = new
+                    max = field.centering_lateral_avg
+
+                x += (upper - lower) / steps
+            
+            field = DiscreteFieldReport(Coil(best))
+            print(field.centering_lateral_avg * 1000)
+            print(field.center_avg * 1000)
+            print(json.dumps(best))
+
