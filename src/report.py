@@ -51,9 +51,6 @@ class DiscreteFieldReport(object):
         self.centering_lateral_avg = max(self.centering_laterals)
         self.centering_diagonal_avg = max(self.centering_diagonals)
 
-        self._12mm = Sensor([12 / 1000, self.observer_height, 0]).getB(model)
-        print(f'12mm is {magnitude(self._12mm) * 1000}mT      centering {centering_strength(np.array([12 / 1000, self.observer_height, 0]), self._12mm, [0,self.observer_height,0]) * 1000}mT')
-
 class FullFieldReport(DiscreteFieldReport):
     # Run a simulation to view the magnetic field of a given coil design
     def __init__(

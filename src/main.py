@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from copy import deepcopy
-from enum import Enum
+from enum import StrEnum
 import json
 from KicadModTree import KicadFileHandler
 import matplotlib
@@ -97,7 +97,14 @@ export.add_argument(
 
 optimize = cmds.add_parser(
     'optimize',
-    help = 'Optimize a design using \'null\' placeholders for vertices over a given range'
+    help = 'Optimize a design using \'null\' placeholders for vertices or turns over a given range with a simple brute-force maximum finder'
+)
+
+optimize.add_argument(
+    '-o',
+    type=str,
+    dest='output',
+    help = 'Output JSON file to write best coil design to'
 )
 
 optimize.add_argument(
@@ -112,17 +119,40 @@ optimize.add_argument(
     help='Upper bound to optimize over'
 )
 
-class OptimizeOver(Enum):
-    LATERAL  = 0
-    DIAGONAL = 1
-    CENTER   = 2
-
+class OptimizeOver(StrEnum):
+    LATERAL  = 'lateral'
+    DIAGONAL = 'diagonal'
+    CENTER   = 'center'
 
 optimize.add_argument(
-    'over',
-    type=lambda v: OptimizeOver.LATERAL if v == 'lateral' else None,
-
+    '--over',
+    dest = 'over',
+    default=OptimizeOver.LATERAL,
+    type=OptimizeOver,
+    choices = OptimizeOver,
+    help = 'Field strength measurement to optimize over'
 )
+
+optimize.add_argument(
+    '-s',
+    '--steps',
+    dest = 'steps',
+    default = 1000,
+    type = int,
+    help = 'Number of steps to take between the lower and upper bound'
+)
+
+def print_discrete_report(coil, field):
+    print(
+    f"""
+    {coil.analysis_title()}
+                 Magnitude      |    Centering Component
+
+    Center:     {field.center_avg*1000:2.7f} mT    |
+    Lateral:    {field.lateral_avg*1000:2.7f} mT    |        {field.centering_lateral_avg*1000:2.7f} mT
+    Diagonal:   {field.diagonal_avg*1000:2.7f} mT    |        {field.centering_diagonal_avg*1000:2.7f} mT
+    """
+    )
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -157,17 +187,7 @@ if __name__ == '__main__':
         case 'discrete':
             coil = Coil(json.load(open(args.file)))
             field = DiscreteFieldReport(coil)
-
-            print(
-    f"""
-    {coil.analysis_title()}
-                 Magnitude      |    Centering Component
-
-    Center:     {field.center_avg*1000:2.7f} mT    |
-    Lateral:    {field.lateral_avg*1000:2.7f} mT    |        {field.centering_lateral_avg*1000:2.7f} mT
-    Diagonal:   {field.diagonal_avg*1000:2.7f} mT    |        {field.centering_diagonal_avg*1000:2.7f} mT
-    """
-            )
+            print_discrete_report(coil, field)
         case 'view':
             Coil(json.load(open(args.file))).simulation_model().show()
         case 'export':
@@ -180,12 +200,11 @@ if __name__ == '__main__':
         case 'optimize':
             base = json.load(open(args.file))
             
-            steps = 100
             lower = args.lower
             upper = args.upper
             x = lower
             
-            best = None
+            best_json = None
             max = -1e99
 
             def replace_var(json, x):
@@ -198,18 +217,35 @@ if __name__ == '__main__':
                     copy['turns'] = int(x)
                 return copy
 
-            for i in range(steps):
+            for i in range(args.steps):
                 new = replace_var(base, x)
                 coil = Coil(new)
                 field = DiscreteFieldReport(coil)
-                if field.centering_lateral_avg > max:
-                    best = new
-                    max = field.centering_lateral_avg
+                
+                measure = -1e99
+                match args.over:
+                    case OptimizeOver.LATERAL:
+                        measure = field.centering_lateral_avg
+                    case OptimizeOver.DIAGONAL:
+                        measure = field.centering_diagonal_avg
+                    case OptimizeOver.CENTER:
+                        measure = field.center_avg
 
-                x += (upper - lower) / steps
+                if measure > max:
+                    best_json = new
+                    max = measure
+
+                print(f'\rMax: {max * 1000:.4f}mT - {measure * 1000:.4f}mT', end='')
+
+                x += (upper - lower) / args.steps
             
-            field = DiscreteFieldReport(Coil(best))
-            print(field.centering_lateral_avg * 1000)
-            print(field.center_avg * 1000)
-            print(json.dumps(best))
+            best = Coil(best_json)
+            field = DiscreteFieldReport(best)
+            print_discrete_report(best, field)
 
+            if args.output is not None:
+                ofile = open(args.output, 'w+')
+                json.dump(best_json, ofile, indent=4)
+            else:
+                print(json.dumps(best_json, indent=4))
+            
