@@ -95,6 +95,14 @@ export.add_argument(
     required = True,
 )
 
+export.add_argument(
+    '-l',
+    '--layer',
+    dest = 'layer',
+    help = 'KiCAD layer name to write the coil to',
+    default = 'F.Cu'
+)
+
 optimize = cmds.add_parser(
     'optimize',
     help = 'Optimize a design using \'null\' placeholders for vertices or turns over a given range with a simple brute-force maximum finder'
@@ -192,7 +200,7 @@ if __name__ == '__main__':
             Coil(json.load(open(args.file))).simulation_model().show()
         case 'export':
             coil = Coil(json.load(open(args.file)))
-            module = coil.kicad_model()
+            module = coil.kicad_model(args.layer)
 
             file_handler = KicadFileHandler(module)
             file_handler.writeFile(args.output)

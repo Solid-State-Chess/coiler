@@ -111,8 +111,7 @@ class Coil(object):
         return current.Polyline(position=(0,0,0), vertices=sim_verts, current=self.current)
     
     # Generate a KiCad footprint object that represents this coil
-    def kicad_model(self) -> Footprint:
-        layer = 'F.Cu'
+    def kicad_model(self, layer: str) -> Footprint:
         footprint = Footprint(self.name)
         footprint.setTags("coil")
         
